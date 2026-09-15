@@ -9,7 +9,7 @@
     {
       "symbol": "MSFT",
       "trailing_stop_pct": 0.1,
-      "highest_price": null,
+      "highest_price": 497.12,
       "triggered": false
     }
   ]
