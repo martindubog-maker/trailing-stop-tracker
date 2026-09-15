@@ -110,6 +110,13 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .setup-note { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 4px; }
+  .refresh-btn {
+    width: 100%; background: var(--card-2); color: var(--text);
+    border: 1px solid var(--border); padding: 12px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; margin-bottom: 4px;
+  }
+  .refresh-btn:disabled { opacity: 0.7; }
+  .refresh-msg { text-align: center; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -120,6 +127,8 @@
 </header>
 
 <main>
+  <button class="refresh-btn" id="refreshBtn" onclick="triggerUpdate()">🔄 Actualizar precios ahora</button>
+  <div class="msg refresh-msg" id="refreshMsg"></div>
   <div id="list"></div>
 </main>
 
@@ -366,6 +375,74 @@ async function deleteStock(index) {
   } catch (e) {
     alert('Error: ' + e.message);
   }
+}
+
+async function triggerUpdate() {
+  const btn = document.getElementById('refreshBtn');
+  const msg = document.getElementById('refreshMsg');
+  const c = getConfig();
+
+  if (!hasConfig()) { openSettings(); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Enviando orden...';
+  msg.textContent = '';
+  msg.className = 'msg refresh-msg';
+
+  const triggerTime = new Date();
+
+  try {
+    const dispatchRes = await fetch(
+      `${GITHUB_API}/repos/${c.owner}/${c.repo}/actions/workflows/check_stocks.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${c.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ref: 'main' })
+      }
+    );
+
+    if (!dispatchRes.ok) {
+      const err = await dispatchRes.json().catch(() => ({}));
+      throw new Error(err.message || `Error ${dispatchRes.status}. Revisa que el token tenga permiso de "Actions".`);
+    }
+
+    btn.innerHTML = '<span class="spinner"></span> Actualizando precios...';
+    msg.textContent = 'Esto puede tardar hasta 1 minuto.';
+
+    await pollRunCompletion(triggerTime);
+
+    msg.textContent = '✓ Precios actualizados';
+    msg.className = 'msg refresh-msg ok';
+    await loadWatchlist();
+    setTimeout(() => { msg.textContent = ''; }, 4000);
+
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.className = 'msg refresh-msg error';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔄 Actualizar precios ahora';
+  }
+}
+
+async function pollRunCompletion(triggerTime) {
+  const c = getConfig();
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 4000));
+    const res = await fetch(
+      `${GITHUB_API}/repos/${c.owner}/${c.repo}/actions/workflows/check_stocks.yml/runs?per_page=5`,
+      { headers: { 'Authorization': `Bearer ${c.token}`, 'Accept': 'application/vnd.github.v3+json' } }
+    );
+    if (!res.ok) continue;
+    const data = await res.json();
+    const run = (data.workflow_runs || []).find(r => new Date(r.created_at) >= new Date(triggerTime.getTime() - 5000));
+    if (run && run.status === 'completed') return run;
+  }
+  throw new Error('La actualización está tardando más de lo normal. Vuelve a cargar la lista en un momento.');
 }
 
 if ('serviceWorker' in navigator) {
