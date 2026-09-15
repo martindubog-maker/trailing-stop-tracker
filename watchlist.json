@@ -4,7 +4,8 @@
       "symbol": "AAPL",
       "trailing_stop_pct": 8,
       "highest_price": 500,
-      "triggered": false
+      "triggered": true,
+      "trigger_price": 330.26
     }
   ]
 }
