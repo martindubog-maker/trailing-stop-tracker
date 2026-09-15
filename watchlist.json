@@ -1,0 +1,10 @@
+{
+  "watchlist": [
+    {
+      "symbol": "AAPL",
+      "trailing_stop_pct": 8,
+      "highest_price": null,
+      "triggered": false
+    }
+  ]
+}
