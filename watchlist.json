@@ -5,6 +5,12 @@
       "trailing_stop_pct": 1,
       "highest_price": 331.34,
       "triggered": false
+    },
+    {
+      "symbol": "MSFT",
+      "trailing_stop_pct": 0.1,
+      "highest_price": null,
+      "triggered": false
     }
   ]
 }
