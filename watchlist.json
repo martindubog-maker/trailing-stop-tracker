@@ -4,7 +4,20 @@
       "symbol": "AAPL",
       "trailing_stop_pct": 1,
       "highest_price": 331.34,
-      "triggered": false
+      "triggered": false,
+      "entry_price": 331.34,
+      "history": [
+        {
+          "t": "2026-09-15T21:32:33Z",
+          "p": 331.34
+        }
+      ],
+      "daily_history": [
+        {
+          "d": "2026-09-15",
+          "p": 331.34
+        }
+      ]
     }
   ]
 }
