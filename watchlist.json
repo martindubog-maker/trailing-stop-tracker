@@ -3,7 +3,7 @@
     {
       "symbol": "AAPL",
       "trailing_stop_pct": 1,
-      "highest_price": null,
+      "highest_price": 331.34,
       "triggered": false
     }
   ]
