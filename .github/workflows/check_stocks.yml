@@ -2,7 +2,7 @@ name: Revisar Trailing Stops
 
 on:
   schedule:
-    # Corre cada 5 minutos. El horario es en UTC (no en hora de Chile).
+    # Corre cada 5 minutos (el mínimo que permite GitHub). El horario es en UTC (no en hora de Chile).
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
     # Esto te permite además correrlo manualmente desde la app de GitHub
@@ -27,10 +27,10 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python check_stocks.py
 
-      - name: Guardar cambios en watchlist.json
+      - name: Guardar cambios en watchlist.json y los historiales
         run: |
           git config user.name "trailing-stop-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add watchlist.json
-          git diff --staged --quiet || git commit -m "Actualizar watchlist"
+          git add watchlist.json history/
+          git diff --staged --quiet || git commit -m "Actualizar watchlist e historiales"
           git push
