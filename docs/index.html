@@ -16,7 +16,10 @@
     --text: #f1f5f9;
     --muted: #94a3b8;
     --green: #16a34a;
+    --green-text: #4ade80;
+    --amber: #f59e0b;
     --red: #dc2626;
+    --red-text: #f87171;
     --border: #334155;
   }
   * { box-sizing: border-box; }
@@ -51,9 +54,22 @@
     padding: 16px;
     margin-bottom: 12px;
   }
-  .stock-row { display: flex; justify-content: space-between; align-items: center; }
-  .stock-symbol { font-size: 18px; font-weight: 600; }
-  .stock-meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .stock-top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .stock-symbol { font-size: 17px; font-weight: 700; }
+  .stock-name { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stock-current-price { font-size: 17px; font-weight: 700; text-align: right; }
+  .gain { font-size: 12px; font-weight: 600; margin-top: 2px; text-align: right; }
+  .gain.up { color: var(--green-text); }
+  .gain.down { color: var(--red-text); }
+  .progress-track {
+    width: 100%; height: 10px; background: var(--card-2);
+    border-radius: 6px; overflow: hidden;
+  }
+  .progress-fill { height: 100%; border-radius: 6px; transition: width 0.3s; }
+  .progress-labels {
+    display: flex; justify-content: space-between;
+    color: var(--muted); font-size: 12px; margin-top: 6px;
+  }
   .badge {
     font-size: 11px;
     padding: 3px 8px;
@@ -62,9 +78,10 @@
   }
   .badge.active { background: rgba(22,163,74,0.15); color: #4ade80; }
   .badge.triggered { background: rgba(220,38,38,0.15); color: #f87171; }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
   .del-btn {
     background: none; border: none; color: var(--muted);
-    font-size: 20px; padding: 4px 8px; cursor: pointer;
+    font-size: 19px; padding: 2px 6px; cursor: pointer;
   }
   .empty {
     text-align: center; color: var(--muted); padding: 40px 20px;
@@ -84,6 +101,7 @@
   .modal {
     background: var(--card); width: 100%; max-width: 480px;
     border-radius: 20px 20px 0 0; padding: 24px 20px 32px;
+    max-height: 85vh; overflow-y: auto;
   }
   .modal h2 { margin: 0 0 16px; font-size: 18px; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
@@ -117,6 +135,50 @@
   }
   .refresh-btn:disabled { opacity: 0.7; }
   .refresh-msg { text-align: center; margin-bottom: 12px; }
+
+  /* Tarjetas de resultado de búsqueda */
+  .match-card {
+    background: var(--card-2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 10px; cursor: pointer;
+  }
+  .match-row { display: flex; justify-content: space-between; align-items: center; }
+
+  /* --- Vista de detalle --- */
+  #detailView {
+    display: none; position: fixed; inset: 0; background: var(--bg);
+    z-index: 20; overflow-y: auto;
+  }
+  #detailView.open { display: block; }
+  .detail-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; }
+  .back-btn {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--card);
+    border: 1px solid var(--border); color: var(--text); font-size: 18px;
+  }
+  .detail-body { padding: 0 20px 40px; max-width: 480px; margin: 0 auto; }
+  .detail-symbol { color: var(--muted); font-size: 17px; margin-bottom: 4px; }
+  .detail-price { font-size: 40px; font-weight: 700; margin: 4px 0 10px; }
+  .detail-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 700;
+  }
+  .detail-badge.up { background: rgba(22,163,74,0.18); color: var(--green-text); }
+  .detail-badge.down { background: rgba(220,38,38,0.18); color: var(--red-text); }
+  .detail-asof { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .chart-wrap { margin: 24px 0; }
+  .range-toggle { display: flex; gap: 8px; margin-bottom: 4px; }
+  .range-btn {
+    flex: 1; background: var(--card); color: var(--muted); border: 1px solid var(--border);
+    padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  }
+  .range-btn.selected { background: var(--card-2); color: var(--text); border-color: var(--muted); }
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;
+  }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  }
+  .stat-label { color: var(--muted); font-size: 12px; }
+  .stat-value { font-size: 17px; font-weight: 700; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -134,19 +196,11 @@
 
 <button class="fab" onclick="openAdd()">+ Agregar stock</button>
 
-<!-- Modal: agregar stock -->
+<!-- Modal: agregar stock (búsqueda + confirmación) -->
 <div class="modal-bg" id="addModal">
   <div class="modal">
-    <h2>Agregar stock</h2>
-    <label>Símbolo (ticker)</label>
-    <input id="symbolInput" placeholder="Ej: AAPL" autocapitalize="characters">
-    <label>Trailing stop (%)</label>
-    <input id="pctInput" type="number" placeholder="Ej: 8" inputmode="decimal">
-    <div class="msg" id="addMsg"></div>
-    <div class="row-btns">
-      <button class="secondary" onclick="closeAdd()">Cancelar</button>
-      <button class="primary" id="addBtn" onclick="addStock()">Agregar</button>
-    </div>
+    <h2 id="addModalTitle">Agregar stock</h2>
+    <div id="addModalBody"></div>
   </div>
 </div>
 
@@ -169,8 +223,27 @@
   </div>
 </div>
 
+<!-- Vista de detalle de un stock -->
+<div id="detailView">
+  <div class="detail-header">
+    <button class="back-btn" onclick="closeDetail()">←</button>
+    <button class="del-btn" id="detailDelBtn" onclick="deleteFromDetail()">🗑️</button>
+  </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
 <script>
 const GITHUB_API = 'https://api.github.com';
+let currentWatchlist = [];
+let detailIndex = null;
+let chartRange = 'week';
+
+// Estado del flujo de "agregar stock"
+let addStep = 'form'; // 'form' | 'searching' | 'results'
+let pendingQuery = '';
+let pendingPct = null;
+let searchMatches = [];
+let searchError = null;
 
 function getConfig() {
   return {
@@ -193,7 +266,7 @@ function openSettings() {
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettings() {
-  if (!hasConfig()) return; // no dejar cerrar si aún no hay config
+  if (!hasConfig()) return;
   document.getElementById('settingsModal').classList.remove('open');
 }
 
@@ -237,25 +310,28 @@ async function saveSettings() {
   }
 }
 
-async function fetchWatchlistFile() {
+/* ---------- Helpers genéricos para leer/escribir archivos en GitHub ---------- */
+
+async function fetchFile(path, { allowMissing = false } = {}) {
   const c = getConfig();
-  const res = await fetch(`${GITHUB_API}/repos/${c.owner}/${c.repo}/contents/watchlist.json`, {
+  const res = await fetch(`${GITHUB_API}/repos/${c.owner}/${c.repo}/contents/${path}`, {
     headers: { 'Authorization': `Bearer ${c.token}`, 'Accept': 'application/vnd.github.v3+json' }
   });
-  if (!res.ok) throw new Error('No se pudo leer watchlist.json (' + res.status + ')');
+  if (res.status === 404 && allowMissing) return { content: null, sha: null };
+  if (!res.ok) throw new Error(`No se pudo leer ${path} (${res.status})`);
   const json = await res.json();
   const content = JSON.parse(decodeURIComponent(escape(atob(json.content))));
   return { content, sha: json.sha };
 }
 
-async function saveWatchlistFile(content, sha, message) {
+async function saveFile(path, content, sha, message) {
   const c = getConfig();
   const body = {
     message,
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
-    sha
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(content))))
   };
-  const res = await fetch(`${GITHUB_API}/repos/${c.owner}/${c.repo}/contents/watchlist.json`, {
+  if (sha) body.sha = sha;
+  const res = await fetch(`${GITHUB_API}/repos/${c.owner}/${c.repo}/contents/${path}`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${c.token}`,
@@ -266,9 +342,97 @@ async function saveWatchlistFile(content, sha, message) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'No se pudo guardar en GitHub');
+    throw new Error(err.message || `No se pudo guardar ${path}`);
   }
 }
+
+async function deleteFile(path, sha, message) {
+  const c = getConfig();
+  const res = await fetch(`${GITHUB_API}/repos/${c.owner}/${c.repo}/contents/${path}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${c.token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ message, sha, branch: 'main' })
+  });
+  if (!res.ok) throw new Error(`No se pudo borrar ${path}`);
+}
+
+const fetchWatchlistFile = () => fetchFile('watchlist.json');
+const saveWatchlistFile = (content, sha, message) => saveFile('watchlist.json', content, sha, message);
+const fetchHistoryFile = (symbol) => fetchFile(`history/${symbol}.json`, { allowMissing: true });
+const deleteHistoryFile = async (symbol) => {
+  try {
+    const { sha } = await fetchHistoryFile(symbol);
+    if (sha) await deleteFile(`history/${symbol}.json`, sha, `Eliminar historial de ${symbol}`);
+  } catch (e) { /* no es grave si falla */ }
+};
+
+/* ---------- Disparar workflows y esperar a que terminen ---------- */
+
+async function dispatchWorkflow(workflowFile, inputs = {}) {
+  const c = getConfig();
+  const res = await fetch(`${GITHUB_API}/repos/${c.owner}/${c.repo}/actions/workflows/${workflowFile}/dispatches`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${c.token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ ref: 'main', inputs })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `Error ${res.status}. Revisa que el token tenga permiso de "Actions".`);
+  }
+}
+
+async function pollRunCompletion(workflowFile, triggerTime) {
+  const c = getConfig();
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 4000));
+    const res = await fetch(
+      `${GITHUB_API}/repos/${c.owner}/${c.repo}/actions/workflows/${workflowFile}/runs?per_page=5`,
+      { headers: { 'Authorization': `Bearer ${c.token}`, 'Accept': 'application/vnd.github.v3+json' } }
+    );
+    if (!res.ok) continue;
+    const data = await res.json();
+    const run = (data.workflow_runs || []).find(r => new Date(r.created_at) >= new Date(triggerTime.getTime() - 5000));
+    if (run && run.status === 'completed') return run;
+  }
+  throw new Error('Está tardando más de lo normal. Intenta de nuevo en un momento.');
+}
+
+/* ---------- Cálculos para la barra de progreso ---------- */
+
+function lastPrice(stock) {
+  return stock.last_price != null ? stock.last_price : (stock.highest_price != null ? stock.highest_price : null);
+}
+function lastTimestamp(stock) {
+  return stock.last_updated || null;
+}
+function gainPct(stock) {
+  const cur = lastPrice(stock);
+  const entry = stock.entry_price;
+  if (cur == null || entry == null || entry === 0) return null;
+  return (cur - entry) / entry * 100;
+}
+function stopPrice(stock) {
+  if (stock.highest_price == null) return null;
+  return stock.highest_price * (1 - stock.trailing_stop_pct / 100);
+}
+function progressPct(stock) {
+  const stop = stopPrice(stock);
+  const cur = lastPrice(stock);
+  if (stop == null || cur == null || stock.highest_price == null) return null;
+  const range = stock.highest_price - stop;
+  if (range <= 0) return 100;
+  return Math.max(0, Math.min(100, (cur - stop) / range * 100));
+}
+
+/* ---------- Lista principal ---------- */
 
 async function loadWatchlist() {
   const list = document.getElementById('list');
@@ -280,12 +444,12 @@ async function loadWatchlist() {
   list.innerHTML = `<div class="empty"><span class="spinner"></span> Cargando...</div>`;
   try {
     const { content } = await fetchWatchlistFile();
-    const stocks = content.watchlist || [];
-    if (stocks.length === 0) {
+    currentWatchlist = content.watchlist || [];
+    if (currentWatchlist.length === 0) {
       list.innerHTML = `<div class="empty">Aún no tienes stocks en la lista.<br>Toca "+ Agregar stock" para empezar.</div>`;
       return;
     }
-    list.innerHTML = stocks.map((s, i) => renderStock(s, i)).join('');
+    list.innerHTML = currentWatchlist.map((s, i) => renderStock(s, i)).join('');
   } catch (e) {
     list.innerHTML = `<div class="empty">Error cargando datos: ${e.message}</div>`;
   }
@@ -293,40 +457,130 @@ async function loadWatchlist() {
 
 function renderStock(s, index) {
   const triggered = !!s.triggered;
-  const max = s.highest_price != null ? `$${Number(s.highest_price).toFixed(2)}` : 'Aún sin registrar';
+  const cur = lastPrice(s);
+  const stop = stopPrice(s);
+  const pp = progressPct(s);
+  const gp = gainPct(s);
+  const gainClass = gp == null ? '' : (gp >= 0 ? 'up' : 'down');
+  const gainText = gp == null ? '' : `${gp >= 0 ? '▲' : '▼'} ${Math.abs(gp).toFixed(2)}%`;
+
+  let barColor = 'var(--green)';
+  if (pp != null) {
+    if (pp < 15) barColor = 'var(--red)';
+    else if (pp < 35) barColor = 'var(--amber)';
+  }
+
+  const barHtml = (pp == null || triggered)
+    ? `<div class="empty" style="padding:6px 0; text-align:left;">${triggered ? 'Trailing stop activado' : 'Esperando el primer chequeo de precio...'}</div>`
+    : `
+      <div class="progress-track"><div class="progress-fill" style="width:${pp.toFixed(1)}%; background:${barColor};"></div></div>
+      <div class="progress-labels">
+        <span>$${stop.toFixed(2)} (${s.trailing_stop_pct}%)</span>
+        <span>$${Number(s.highest_price).toFixed(2)}</span>
+      </div>`;
+
   return `
-    <div class="card">
-      <div class="stock-row">
+    <div class="card" onclick="openDetail(${index})">
+      <div class="stock-top-row">
         <div>
           <div class="stock-symbol">${s.symbol}</div>
-          <div class="stock-meta">Trailing stop: ${s.trailing_stop_pct}% · Máximo: ${max}</div>
         </div>
-        <div style="text-align:right; display:flex; align-items:center; gap:10px;">
-          <span class="badge ${triggered ? 'triggered' : 'active'}">${triggered ? 'Vender' : 'Activo'}</span>
-          <button class="del-btn" onclick="deleteStock(${index})">🗑️</button>
+        <div>
+          <div class="stock-current-price">${cur != null ? '$' + Number(cur).toFixed(2) : '—'}</div>
+          <div class="gain ${gainClass}">${gainText}</div>
         </div>
+      </div>
+      ${barHtml}
+      <div class="card-footer">
+        <span class="badge ${triggered ? 'triggered' : 'active'}">${triggered ? 'Vender' : 'Activo'}</span>
+        <button class="del-btn" onclick="event.stopPropagation(); deleteStock(${index})">🗑️</button>
       </div>
     </div>`;
 }
 
+/* ---------- Agregar stock: buscar -> confirmar -> agregar ---------- */
+
 function openAdd() {
-  document.getElementById('symbolInput').value = '';
-  document.getElementById('pctInput').value = '';
-  document.getElementById('addMsg').textContent = '';
+  addStep = 'form';
+  pendingQuery = '';
+  pendingPct = null;
+  searchMatches = [];
+  searchError = null;
+  renderAddModal();
   document.getElementById('addModal').classList.add('open');
 }
 function closeAdd() {
   document.getElementById('addModal').classList.remove('open');
 }
 
-async function addStock() {
-  const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+function renderAddModal() {
+  const title = document.getElementById('addModalTitle');
+  const body = document.getElementById('addModalBody');
+
+  if (addStep === 'form') {
+    title.textContent = 'Agregar stock';
+    body.innerHTML = `
+      <label>Símbolo o nombre de la empresa</label>
+      <input id="symbolInput" placeholder="Ej: AAPL o Apple" autocapitalize="words">
+      <label>Trailing stop (%)</label>
+      <input id="pctInput" type="number" placeholder="Ej: 8" inputmode="decimal">
+      <div class="msg" id="addMsg"></div>
+      <div class="row-btns">
+        <button class="secondary" onclick="closeAdd()">Cancelar</button>
+        <button class="primary" id="addBtn" onclick="startSearch()">Buscar</button>
+      </div>`;
+  } else if (addStep === 'searching') {
+    title.textContent = 'Buscando...';
+    body.innerHTML = `
+      <div class="empty" style="padding:30px 10px;"><span class="spinner"></span><br><br>Buscando "${pendingQuery}"...</div>
+      <div class="row-btns"><button class="secondary" onclick="closeAdd()">Cancelar</button></div>`;
+  } else if (addStep === 'results') {
+    if (searchError) {
+      title.textContent = 'Error al buscar';
+      body.innerHTML = `
+        <p class="setup-note">${searchError}</p>
+        <div class="row-btns">
+          <button class="secondary" onclick="addStep='form'; renderAddModal();">Volver</button>
+          <button class="secondary" onclick="closeAdd()">Cancelar</button>
+        </div>`;
+    } else if (searchMatches.length === 0) {
+      title.textContent = 'Sin resultados';
+      body.innerHTML = `
+        <p class="setup-note">No encontramos ningún resultado para "${pendingQuery}". Revisa que el símbolo o nombre esté bien escrito.</p>
+        <div class="row-btns">
+          <button class="secondary" onclick="addStep='form'; renderAddModal();">Volver</button>
+          <button class="secondary" onclick="closeAdd()">Cancelar</button>
+        </div>`;
+    } else {
+      title.textContent = searchMatches.length > 1 ? 'Elige el correcto' : 'Confirma el stock';
+      body.innerHTML = `
+        <p class="setup-note">${searchMatches.length > 1 ? 'Encontramos varias coincidencias, toca la correcta:' : 'Toca para confirmar que es este:'}</p>
+        ${searchMatches.map((m, i) => `
+          <div class="match-card" onclick="confirmAdd(${i})">
+            <div class="match-row">
+              <div>
+                <div class="stock-symbol">${m.symbol}</div>
+                <div class="stock-name">${m.name}</div>
+              </div>
+              <div class="stock-current-price">${m.price != null ? '$' + Number(m.price).toFixed(2) : 'Sin precio'}</div>
+            </div>
+          </div>
+        `).join('')}
+        <div class="row-btns">
+          <button class="secondary" onclick="addStep='form'; renderAddModal();">Volver</button>
+          <button class="secondary" onclick="closeAdd()">Cancelar</button>
+        </div>`;
+    }
+  }
+}
+
+async function startSearch() {
+  const symbolInput = document.getElementById('symbolInput').value.trim();
   const pct = parseFloat(document.getElementById('pctInput').value);
   const msg = document.getElementById('addMsg');
-  const btn = document.getElementById('addBtn');
 
-  if (!symbol || !/^[A-Z0-9.\-]{1,10}$/.test(symbol)) {
-    msg.textContent = 'Ingresa un símbolo válido (ej: AAPL).';
+  if (!symbolInput) {
+    msg.textContent = 'Escribe un símbolo o nombre.';
     msg.className = 'msg error';
     return;
   }
@@ -336,51 +590,204 @@ async function addStock() {
     return;
   }
 
-  btn.innerHTML = '<span class="spinner"></span>';
-  msg.textContent = '';
+  pendingQuery = symbolInput;
+  pendingPct = pct;
+  searchError = null;
+  addStep = 'searching';
+  renderAddModal();
+
+  try {
+    const triggerTime = new Date();
+    await dispatchWorkflow('search_stock.yml', { query: symbolInput });
+    await pollRunCompletion('search_stock.yml', triggerTime);
+    const { content } = await fetchFile('search_results.json', { allowMissing: true });
+    searchMatches = (content && content.matches) ? content.matches : [];
+  } catch (e) {
+    searchMatches = [];
+    searchError = e.message;
+  }
+
+  addStep = 'results';
+  renderAddModal();
+}
+
+async function confirmAdd(matchIndex) {
+  const match = searchMatches[matchIndex];
+  const body = document.getElementById('addModalBody');
+  body.innerHTML = `<div class="empty" style="padding:30px 10px;"><span class="spinner"></span><br><br>Agregando ${match.symbol}...</div>`;
 
   try {
     const { content, sha } = await fetchWatchlistFile();
     content.watchlist = content.watchlist || [];
 
-    if (content.watchlist.some(s => s.symbol === symbol)) {
-      throw new Error(`${symbol} ya está en tu lista.`);
+    if (content.watchlist.some(s => s.symbol === match.symbol)) {
+      throw new Error(`${match.symbol} ya está en tu lista.`);
     }
 
     content.watchlist.push({
-      symbol,
-      trailing_stop_pct: pct,
+      symbol: match.symbol,
+      trailing_stop_pct: pendingPct,
       highest_price: null,
+      entry_price: null,
+      last_price: null,
+      last_updated: null,
       triggered: false
     });
 
-    await saveWatchlistFile(content, sha, `Agregar ${symbol} vía app`);
+    await saveWatchlistFile(content, sha, `Agregar ${match.symbol} vía app`);
     closeAdd();
     loadWatchlist();
   } catch (e) {
-    msg.textContent = e.message;
-    msg.className = 'msg error';
-  } finally {
-    btn.textContent = 'Agregar';
+    body.innerHTML = `
+      <div class="msg error">${e.message}</div>
+      <div class="row-btns"><button class="secondary" onclick="addStep='results'; renderAddModal();">Volver</button></div>`;
   }
 }
+
+/* ---------- Eliminar stock ---------- */
 
 async function deleteStock(index) {
   if (!confirm('¿Quitar este stock de tu lista?')) return;
   try {
     const { content, sha } = await fetchWatchlistFile();
+    const symbol = content.watchlist[index].symbol;
     content.watchlist.splice(index, 1);
     await saveWatchlistFile(content, sha, 'Quitar stock vía app');
+    deleteHistoryFile(symbol);
     loadWatchlist();
   } catch (e) {
     alert('Error: ' + e.message);
   }
 }
+function deleteFromDetail() {
+  if (detailIndex == null) return;
+  closeDetail();
+  deleteStock(detailIndex);
+}
+
+/* ---------- Vista de detalle + gráfico ---------- */
+
+async function openDetail(index) {
+  detailIndex = index;
+  chartRange = 'week';
+  const s = currentWatchlist[index];
+  document.getElementById('detailBody').innerHTML = renderDetail(s, true);
+  document.getElementById('detailView').classList.add('open');
+
+  try {
+    const { content } = await fetchHistoryFile(s.symbol);
+    s.history = content ? (content.history || []) : [];
+    s.daily_history = content ? (content.daily_history || []) : [];
+  } catch (e) {
+    s.history = [];
+    s.daily_history = [];
+  }
+
+  if (detailIndex === index) {
+    document.getElementById('detailBody').innerHTML = renderDetail(s, false);
+  }
+}
+function closeDetail() {
+  document.getElementById('detailView').classList.remove('open');
+  detailIndex = null;
+}
+
+function getChartData(s) {
+  if (chartRange === 'all') {
+    return (s.daily_history || []).map(d => ({ t: d.d, p: d.p }));
+  }
+  return s.history || [];
+}
+function setChartRange(range) {
+  chartRange = range;
+  const s = currentWatchlist[detailIndex];
+  document.getElementById('detailBody').innerHTML = renderDetail(s, false);
+}
+
+function renderDetail(s, loadingChart) {
+  const cur = lastPrice(s);
+  const gp = gainPct(s);
+  const gainClass = gp == null ? 'up' : (gp >= 0 ? 'up' : 'down');
+  const gainText = gp == null ? 'Sin datos' : `${gp >= 0 ? '↗' : '↘'} ${gp >= 0 ? '+' : ''}${gp.toFixed(2)}%`;
+  const asof = lastTimestamp(s);
+  const asofText = asof ? new Date(asof).toLocaleString('es-CL', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : 'Sin datos aún';
+
+  const chartHtml = loadingChart
+    ? `<div class="empty" style="padding:50px 10px;"><span class="spinner"></span> Cargando historial...</div>`
+    : buildChartSVG(getChartData(s));
+
+  const stop = stopPrice(s);
+
+  return `
+    <div class="detail-symbol">${s.symbol}</div>
+    <div class="detail-price">${cur != null ? '$' + Number(cur).toFixed(2) : '—'}</div>
+    <span class="detail-badge ${gainClass}">${gainText}</span>
+    <div class="detail-asof">Última actualización: ${asofText}</div>
+
+    <div class="range-toggle">
+      <button class="range-btn ${chartRange === 'week' ? 'selected' : ''}" onclick="setChartRange('week')">Última semana</button>
+      <button class="range-btn ${chartRange === 'all' ? 'selected' : ''}" onclick="setChartRange('all')">Todo el historial</button>
+    </div>
+    <div class="chart-wrap" id="chartWrap">${chartHtml}</div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Precio de entrada</div>
+        <div class="stat-value">${s.entry_price != null ? '$' + Number(s.entry_price).toFixed(2) : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Precio máximo</div>
+        <div class="stat-value">${s.highest_price != null ? '$' + Number(s.highest_price).toFixed(2) : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Precio de venta (stop)</div>
+        <div class="stat-value">${stop != null ? '$' + stop.toFixed(2) : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Estado</div>
+        <div class="stat-value">${s.triggered ? '🔴 Vender' : '🟢 Activo'}</div>
+      </div>
+    </div>
+  `;
+}
+
+function buildChartSVG(history) {
+  if (!history || history.length < 2) {
+    return `<div class="empty" style="padding:50px 10px;">Aún no hay suficientes datos históricos para el gráfico. Vuelve en un rato.</div>`;
+  }
+  const prices = history.map(h => h.p);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = (max - min) || (max * 0.01) || 1;
+  const w = 320, h = 180, padTop = 14, padBottom = 14;
+  const usableH = h - padTop - padBottom;
+  const stepX = w / (history.length - 1);
+
+  const up = prices[prices.length - 1] >= prices[0];
+  const color = up ? '#4ade80' : '#f87171';
+
+  const pts = history.map((pt, i) => {
+    const x = i * stepX;
+    const y = padTop + (1 - (pt.p - min) / range) * usableH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto;">
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div style="display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:4px;">
+      <span>$${min.toFixed(2)}</span>
+      <span>$${max.toFixed(2)}</span>
+    </div>
+  `;
+}
+
+/* ---------- Actualizar precios ahora ---------- */
 
 async function triggerUpdate() {
   const btn = document.getElementById('refreshBtn');
   const msg = document.getElementById('refreshMsg');
-  const c = getConfig();
 
   if (!hasConfig()) { openSettings(); return; }
 
@@ -392,34 +799,16 @@ async function triggerUpdate() {
   const triggerTime = new Date();
 
   try {
-    const dispatchRes = await fetch(
-      `${GITHUB_API}/repos/${c.owner}/${c.repo}/actions/workflows/check_stocks.yml/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${c.token}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ ref: 'main' })
-      }
-    );
-
-    if (!dispatchRes.ok) {
-      const err = await dispatchRes.json().catch(() => ({}));
-      throw new Error(err.message || `Error ${dispatchRes.status}. Revisa que el token tenga permiso de "Actions".`);
-    }
-
+    await dispatchWorkflow('check_stocks.yml');
     btn.innerHTML = '<span class="spinner"></span> Actualizando precios...';
     msg.textContent = 'Esto puede tardar hasta 1 minuto.';
 
-    await pollRunCompletion(triggerTime);
+    await pollRunCompletion('check_stocks.yml', triggerTime);
 
     msg.textContent = '✓ Precios actualizados';
     msg.className = 'msg refresh-msg ok';
     await loadWatchlist();
     setTimeout(() => { msg.textContent = ''; }, 4000);
-
   } catch (e) {
     msg.textContent = e.message;
     msg.className = 'msg refresh-msg error';
@@ -427,22 +816,6 @@ async function triggerUpdate() {
     btn.disabled = false;
     btn.innerHTML = '🔄 Actualizar precios ahora';
   }
-}
-
-async function pollRunCompletion(triggerTime) {
-  const c = getConfig();
-  for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 4000));
-    const res = await fetch(
-      `${GITHUB_API}/repos/${c.owner}/${c.repo}/actions/workflows/check_stocks.yml/runs?per_page=5`,
-      { headers: { 'Authorization': `Bearer ${c.token}`, 'Accept': 'application/vnd.github.v3+json' } }
-    );
-    if (!res.ok) continue;
-    const data = await res.json();
-    const run = (data.workflow_runs || []).find(r => new Date(r.created_at) >= new Date(triggerTime.getTime() - 5000));
-    if (run && run.status === 'completed') return run;
-  }
-  throw new Error('La actualización está tardando más de lo normal. Vuelve a cargar la lista en un momento.');
 }
 
 if ('serviceWorker' in navigator) {
