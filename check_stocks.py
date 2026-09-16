@@ -1,35 +1,32 @@
 """
 Vigilante de Trailing Stop
 ---------------------------
-Este script:
-1. Lee la lista de stocks desde watchlist.json
-2. Consulta el precio actual de cada stock en Yahoo Finance
-3. Guarda el precio en el historial del stock (para el gráfico)
-4. Actualiza el precio máximo visto para cada stock
-5. Si el precio cayó más del % configurado desde el máximo, envía
-   una notificación por ntfy y marca el stock como "triggered"
-6. Guarda watchlist.json actualizado
+Arquitectura (pensada para trackear muchos stocks sin problemas de tamaño):
+- watchlist.json: solo metadata liviana de cada stock (símbolo, % de stop,
+  máximo, entrada, último precio, estado). Se mantiene siempre chico, sin
+  importar cuántos stocks trackees.
+- history/<SYMBOL>.json: el historial de precios de CADA stock vive en su
+  propio archivo separado. Así, tener muchos stocks no hace que un solo
+  archivo gigante se vuelva un problema — cada uno crece independiente.
 
-No necesitas entender cada línea para usarlo, pero está comentado
-por si en algún momento quieres tocarlo.
+Este script:
+1. Lee watchlist.json
+2. Para cada stock activo, consulta su precio en Yahoo Finance
+3. Lee/actualiza su archivo de historial en history/<SYMBOL>.json
+4. Actualiza el máximo, precio actual, y decide si hay que notificar
+5. Guarda watchlist.json y los archivos de historial que cambiaron
 """
 
 import json
 import os
-import sys
 import urllib.request
 from datetime import datetime, timezone
 
 WATCHLIST_FILE = "watchlist.json"
+HISTORY_DIR = "history"
 
-# "history" guarda alta resolución (un punto cada 5 min) pero SOLO de los
-# últimos días, para no crecer sin límite. Con chequeos cada 5 min, 2016
-# puntos equivalen aprox. a 1 semana. Es la vista de detalle reciente.
-HISTORY_MAX_POINTS = 2016
-
-# "daily_history" guarda 1 punto por día, para siempre (o casi). A este
-# ritmo, incluso 10 años de datos pesan muy poco. Es la vista de largo plazo.
-DAILY_HISTORY_MAX_DAYS = 3650  # ~10 años
+HISTORY_MAX_POINTS = 2016       # ~1 semana de detalle fino (cada 5 min)
+DAILY_HISTORY_MAX_DAYS = 3650   # ~10 años de resumen diario (1 punto/día)
 
 # El "topic" de ntfy se guarda como secreto de GitHub, no acá en el código,
 # para que nadie más pueda mandarte notificaciones falsas.
@@ -42,10 +39,8 @@ def get_price(symbol: str) -> float:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=10) as response:
         data = json.loads(response.read().decode())
-
     result = data["chart"]["result"][0]
-    price = result["meta"]["regularMarketPrice"]
-    return float(price)
+    return float(result["meta"]["regularMarketPrice"])
 
 
 def send_notification(symbol: str, price: float, max_price: float, drop_pct: float):
@@ -59,7 +54,6 @@ def send_notification(symbol: str, price: float, max_price: float, drop_pct: flo
         f"{symbol} cayó {drop_pct:.2f}% desde su máximo de ${max_price:.2f}. "
         f"Precio actual: ${price:.2f}. Tu trailing stop se activó."
     )
-
     url = f"https://ntfy.sh/{NTFY_TOPIC}"
     req = urllib.request.Request(
         url,
@@ -75,6 +69,26 @@ def send_notification(symbol: str, price: float, max_price: float, drop_pct: flo
     print(f"Notificación enviada para {symbol}")
 
 
+def history_path(symbol: str) -> str:
+    return os.path.join(HISTORY_DIR, f"{symbol}.json")
+
+
+def load_history(symbol: str) -> dict:
+    """Lee el archivo de historial del stock, o devuelve uno vacío si no existe todavía."""
+    path = history_path(symbol)
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"history": [], "daily_history": []}
+
+
+def save_history(symbol: str, hist: dict):
+    os.makedirs(HISTORY_DIR, exist_ok=True)
+    # Formato compacto (sin espacios ni indentación) para ahorrar espacio.
+    with open(history_path(symbol), "w", encoding="utf-8") as f:
+        json.dump(hist, f, ensure_ascii=False, separators=(",", ":"))
+
+
 def main():
     if not os.path.exists(WATCHLIST_FILE):
         print(f"No existe {WATCHLIST_FILE}, no hay nada que revisar.")
@@ -84,8 +98,9 @@ def main():
         data = json.load(f)
 
     watchlist = data.get("watchlist", [])
-    changed = False
+    watchlist_changed = False
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    today_str = now_iso[:10]
 
     for stock in watchlist:
         symbol = stock["symbol"]
@@ -104,17 +119,21 @@ def main():
         if stock.get("entry_price") is None:
             stock["entry_price"] = price
 
-        # Guardamos el punto de alta resolución (últimos días, para el gráfico reciente).
-        history = stock.setdefault("history", [])
-        history.append({"t": now_iso, "p": round(price, 4)})
-        if len(history) > HISTORY_MAX_POINTS:
-            del history[: len(history) - HISTORY_MAX_POINTS]
+        # Estos dos campos livianos SÍ viven en watchlist.json (para que la
+        # lista principal de la app no tenga que leer el historial completo
+        # de cada stock solo para mostrar el precio actual).
+        stock["last_price"] = round(price, 4)
+        stock["last_updated"] = now_iso
+        watchlist_changed = True
 
-        # Guardamos/actualizamos el punto del día en el historial de largo plazo.
-        # Si ya hay un punto para hoy, lo actualizamos con el precio más reciente;
-        # si es un día nuevo, agregamos uno nuevo (así queda 1 punto por día, para siempre).
-        today_str = now_iso[:10]  # "YYYY-MM-DD"
-        daily = stock.setdefault("daily_history", [])
+        # --- Historial detallado: vive en su propio archivo por símbolo ---
+        hist = load_history(symbol)
+
+        hist["history"].append({"t": now_iso, "p": round(price, 4)})
+        if len(hist["history"]) > HISTORY_MAX_POINTS:
+            del hist["history"][: len(hist["history"]) - HISTORY_MAX_POINTS]
+
+        daily = hist["daily_history"]
         if daily and daily[-1]["d"] == today_str:
             daily[-1]["p"] = round(price, 4)
         else:
@@ -122,8 +141,9 @@ def main():
         if len(daily) > DAILY_HISTORY_MAX_DAYS:
             del daily[: len(daily) - DAILY_HISTORY_MAX_DAYS]
 
-        changed = True
+        save_history(symbol, hist)
 
+        # --- Máximo y trailing stop ---
         max_price = stock.get("highest_price")
 
         if max_price is None or price > max_price:
@@ -141,9 +161,9 @@ def main():
             stock["triggered"] = True
             stock["trigger_price"] = price
 
-    if changed:
+    if watchlist_changed:
         with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
         print("watchlist.json actualizado.")
     else:
         print("Sin cambios.")
