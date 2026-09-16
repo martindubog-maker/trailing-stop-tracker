@@ -1,1 +1,13 @@
-{"watchlist":[{"symbol":"AAPL","trailing_stop_pct":8,"highest_price":null,"entry_price":null,"last_price":null,"last_updated":null,"triggered":false}]}
+{
+  "watchlist":[
+    {
+      "symbol":"AAPL",
+      "trailing_stop_pct":8,
+      "highest_price":null,
+      "entry_price":null,
+      "last_price":null,
+      "last_updated":null,
+      "triggered":false
+    }
+  ]
+}
